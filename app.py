@@ -166,5 +166,82 @@ if st.button("Analyze"):
             "Close interaction"
         ]
     }
+#-----------------------------
+    # Display Results
+    # -----------------------------
 
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        st.subheader("📝 Summary")
+
+        for item in summary:
+            st.write("•", item)
+
+        st.subheader("😊 Sentiment")
+        st.info(sentiment)
+
+        st.subheader("⚠ Risk Level")
+
+        if risk == "High":
+            st.error(risk)
+        elif risk == "Medium":
+            st.warning(risk)
+        else:
+            st.success(risk)
+
+    with col2:
+
+        st.subheader("📌 Key Discussion Points")
+
+        if customer_points:
+            for point in customer_points:
+                st.write("•", point)
+        else:
+            st.write("No customer points found.")
+
+        st.subheader("🎯 Next Best Actions")
+
+        for action in actions[category]:
+            st.write("✅", action)
+
+    # -----------------------------
+    # Metrics
+    # -----------------------------
+
+    st.subheader("📊 Call Statistics")
+
+    c = 0
+    a = 0
+
+    for line in lines:
+        low = line.lower()
+
+        if low.startswith("customer") or low.startswith("patient"):
+            c += 1
+
+        elif low.startswith("agent"):
+            a += 1
+
+    m1, m2, m3 = st.columns(3)
+
+    m1.metric("Customer Messages", c)
+    m2.metric("Agent Messages", a)
+    m3.metric("Total Lines", len(lines))
+
+    # -----------------------------
+    # Supervisor Recommendation
+    # -----------------------------
+
+    st.subheader("👨‍💼 Supervisor Recommendation")
+
+    st.write(
+        f"""
+Review the conversation and ensure that all
+recommended actions for the {category.lower()} case
+are completed. Monitor customer satisfaction and
+follow up where necessary.
+"""
+    )
     #
