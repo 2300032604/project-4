@@ -1,4 +1,6 @@
 import streamlit as st
+import pandas as pd
+import matplotlib.pyplot as plt
 
 st.set_page_config(
     page_title="AI Call Center Supervisor Assistant",
@@ -6,6 +8,14 @@ st.set_page_config(
     layout="wide"
 )
 
+# ---------------- SESSION STATE ----------------
+if "selected_category" not in st.session_state:
+    st.session_state.selected_category = "Loan"
+
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+# ---------------- CSS ----------------
 st.markdown("""
 <style>
 .stApp {
@@ -82,17 +92,14 @@ st.markdown("""
     border: 1px solid #334155;
 }
 
-.stRadio label {
-    color: #e5e7eb;
-}
-
 .stButton button {
     background: linear-gradient(90deg, #2563eb, #0284c7);
     color: white;
     border-radius: 12px;
-    padding: 0.75rem 2.2rem;
+    padding: 0.75rem 1.3rem;
     font-weight: 700;
     border: none;
+    width: 100%;
 }
 
 .stButton button:hover {
@@ -113,33 +120,43 @@ hr {
 </style>
 """, unsafe_allow_html=True)
 
+# ---------------- HEADER ----------------
 st.markdown("""
 <div class="hero">
     <div class="hero-badge">AI Powered Supervisor Dashboard</div>
     <div class="hero-title">AI Call Center <span>Supervisor Assistant</span></div>
     <div class="hero-subtitle">
         Analyze customer-agent conversations, identify sentiment, detect risk level,
-        extract key discussion points, and generate next best actions for supervisors.
+        extract key discussion points, track previous history, and generate supervisor actions.
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="card">', unsafe_allow_html=True)
+# ---------------- CATEGORY BUTTONS ----------------
+categories = [
+    "Loan",
+    "Insurance",
+    "Telecom",
+    "E-Commerce",
+    "Health",
+    "Credit Card",
+    "Complaint / Support",
+    "General"
+]
 
-category = st.radio(
-    "Select Category",
-    [
-        "Loan",
-        "Insurance",
-        "Telecom",
-        "E-Commerce",
-        "Health",
-        "Credit Card",
-        "Complaint / Support",
-        "General"
-    ],
-    horizontal=True
-)
+st.markdown('<div class="card">', unsafe_allow_html=True)
+st.markdown('<div class="section-title">📂 Select Module</div>', unsafe_allow_html=True)
+
+cols = st.columns(4)
+
+for i, cat in enumerate(categories):
+    with cols[i % 4]:
+        if st.button(cat):
+            st.session_state.selected_category = cat
+
+category = st.session_state.selected_category
+
+st.info(f"Selected Module: **{category}**")
 
 transcript = st.text_area(
     "Paste Call Transcript",
@@ -151,6 +168,7 @@ analyze = st.button("Analyze Call")
 
 st.markdown('</div>', unsafe_allow_html=True)
 
+# ---------------- ANALYSIS ----------------
 if analyze:
 
     if not transcript.strip():
@@ -191,6 +209,17 @@ if analyze:
             customer_points.append(
                 line.split(":", 1)[1].strip() if ":" in line else line
             )
+
+    customer_count = 0
+    agent_count = 0
+
+    for line in lines:
+        low = line.lower()
+
+        if low.startswith("customer") or low.startswith("patient"):
+            customer_count += 1
+        elif low.startswith("agent"):
+            agent_count += 1
 
     summary = []
 
@@ -252,17 +281,16 @@ if analyze:
         ]
     }
 
-    customer_count = 0
-    agent_count = 0
+    st.session_state.history.append({
+        "Category": category,
+        "Sentiment": sentiment,
+        "Risk": risk,
+        "Customer Messages": customer_count,
+        "Agent Messages": agent_count,
+        "Total Lines": len(lines)
+    })
 
-    for line in lines:
-        low = line.lower()
-
-        if low.startswith("customer") or low.startswith("patient"):
-            customer_count += 1
-        elif low.startswith("agent"):
-            agent_count += 1
-
+    # ---------------- OVERVIEW ----------------
     st.markdown("### 📊 Call Overview")
 
     m1, m2, m3, m4 = st.columns(4)
@@ -317,15 +345,61 @@ if analyze:
 
         st.markdown('</div>', unsafe_allow_html=True)
 
+    # ---------------- HISTORY GRAPH ----------------
+    st.markdown("### 📈 Risk Level Based on Previous History")
+
+    history_df = pd.DataFrame(st.session_state.history)
+
+    risk_order = ["Low", "Medium", "High"]
+    risk_counts = history_df["Risk"].value_counts().reindex(risk_order, fill_value=0)
+
+    g1, g2 = st.columns(2)
+
+    with g1:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Risk Distribution</div>', unsafe_allow_html=True)
+
+        fig, ax = plt.subplots()
+        ax.bar(risk_counts.index, risk_counts.values)
+        ax.set_xlabel("Risk Level")
+        ax.set_ylabel("Number of Calls")
+        ax.set_title("Previous Call Risk History")
+        st.pyplot(fig)
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with g2:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Call History Table</div>', unsafe_allow_html=True)
+
+        st.dataframe(history_df, use_container_width=True)
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # ---------------- SUPERVISOR RECOMMENDATION ----------------
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown('<div class="section-title">👨‍💼 Supervisor Recommendation</div>', unsafe_allow_html=True)
 
-    st.write(
-        f"""
-        Review the conversation carefully and ensure all recommended actions for the 
-        **{category.lower()}** case are completed. Monitor customer satisfaction, 
-        assign ownership, and follow up where necessary.
-        """
-    )
+    if risk == "High":
+        st.error(
+            f"""
+            High-risk {category.lower()} case detected. Supervisor should immediately review 
+            the conversation, escalate the issue, assign ownership, and ensure quick resolution.
+            """
+        )
+    elif risk == "Medium":
+        st.warning(
+            f"""
+            Medium-risk {category.lower()} case detected. Supervisor should monitor the case, 
+            verify pending actions, and schedule follow-up if required.
+            """
+        )
+    else:
+        st.success(
+            f"""
+            Low-risk {category.lower()} case detected. The conversation appears stable. 
+            Supervisor can review and close after confirming customer satisfaction.
+            """
+        )
 
     st.markdown('</div>', unsafe_allow_html=True)
